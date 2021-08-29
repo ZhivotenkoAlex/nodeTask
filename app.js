@@ -3,8 +3,10 @@ const url = require("url")
 const mariadb = require("mariadb")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
+const { v4: uuid } = require('uuid')
 
 const saltRounds = 10
+const SECRET = "trololo"
 
 const pool = mariadb.createPool({
   host: "localhost",
@@ -30,16 +32,15 @@ async function getItemById(req, res) {
 }
 
 async function AddItemToDB(body) {
-  try {
+  try {  
     let conn = await pool.getConnection()
     const title = body.title
-    const sql = `INSERT INTO todo (text) VALUES (?);`
+    const sql = `INSERT INTO todo (text) VALUES ?`
     let rows = await conn.query(sql, title, null)
-    res.end("It`s respond from get")
     conn.end()
   } catch (error) {
-    res.statusCode = 404
-    res.end(`Something went wrong`)
+    console.log("error", error)
+    return false
   }
 }
 
@@ -51,8 +52,10 @@ async function editElement(body) {
     let rows = await conn.query(sql, editInfo, null)
     conn.end()
   } catch (error) {
-    res.statusCode = 404
-    res.end(`There are no item with id=${idFromQueryString}`)
+    // res.statusCode = 404
+    // res.end(`There are no item with id=${idFromQueryString}`)
+     console.log("error", error)
+    return false
   }
 }
 
@@ -73,9 +76,9 @@ async function findUserByEmail(body) {
   try {
     let conn = await pool.getConnection()
     const email = body.email
-    const sql = `SELECT * FROM users WHERE email=? LIMIT 1`
+    const sql = `SELECT * FROM users WHERE email=? LIMIT 1;`
     let [row] = await conn.query(sql, email, null)
-    conn.end()
+    // conn.end()
     return row
   } catch (error) {
     console.log("error", error)
@@ -89,18 +92,17 @@ async function findUserById(body) {
     const id = body.id
     const sql = `SELECT * FROM users WHERE id=?`
     let [row] = await conn.query(sql, id, null)
-    conn.end()
+    // conn.end()
     return row
   } catch (error) {
-    res.statusCode = 404
-    res.end(`No users was found`)
+    console.log("error", error)
+    return false
   }
 }
 
 async function addUser(body) {
   const salt = await bcrypt.genSalt(saltRounds)
   const password = await bcrypt.hash(body.password, salt, null)
-
   try {
     const user = await findUserByEmail(body)
     if (user) {
@@ -122,24 +124,106 @@ async function isValidPassword(body) {
   const user = await findUserByEmail(body)
   return bcrypt.compare(body.password, user.password)
 }
-async function updateToken(is, token) {
-  let conn = await pool.getConnection()
+
+
+
+async function generateAccessToken(body){
+  const user = await findUserByEmail(body)
+  const payload = { type: "access", id: user.id }
+  const token = jwt.sign(payload, SECRET, { expiresIn: "2m" })
+  return token
+}
+
+async function generateRefreshToken() {
+  const payload = { id: uuid(), type: 'refresh' }
+
+  const token = jwt.sign(payload, SECRET, { expiresIn: "4m" })
+  return 
+   token
+  
+}
+
+async function updateDbRefreshToken(refreshToken, body) {
+  try {
+    let conn = await pool.getConnection()
+    const user = await findUserById(body)
+    // const refreshToken=generateRefreshToken()
+    const editInfo = [refreshToken, user.id]
+    const sql = `UPDATE users SET token=? WHERE id=?`
+    let rows = await conn.query(sql, editInfo, null)
+    conn.end()
+  } catch (error) {
+    console.log(error);
+  }
+}
+
+async function updateTokens(body) {
+  const accessToken = await generateAccessToken(body)
+
+    const refreshToken =await generateRefreshToken()
+
+  await updateDbRefreshToken(refreshToken, body)
+  return {
+    accessToken,
+    refreshToken:token
+  }
 }
 
 async function login(body) {
   try {
     const isValid = await isValidPassword(body)
     if (isValid) {
-      const user = await findUserByEmail(body)
-      const payload = { id: user.userId }
-      const SECRET = "trololo"
-      const token = jwt.sign(payload, SECRET, { expiresIn: "2h" })
-      return { token }
+      // const user = await findUserByEmail(body)
+      // const payload = { id: user.id }
+      const tokens = await updateTokens(body)
+      return  tokens 
     }
   } catch (error) {
     return false
   }
 }
+
+async function refreshTokens(body) {
+  const refreshToken = body.refreshToken
+  let payload
+  try {
+    payload = jwt.verify(refreshToken, SECRET)
+    if (payload.type !== 'refresh') {
+      return false
+    }
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return 'token expired'
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      return 'token error'
+    }
+  }
+
+  updateTokens(body)
+}
+
+async function verifyAccess(req,res) {
+  const auth = url.parse(req.url, true).query.Authorization
+  const token = auth.split(' ')[1]
+  try {
+    const payload=jwt.verify(token, SECRET)
+    if (payload.type !== 'access') {
+      res.statusCode(401)
+      res.end("invalid token")
+        return token
+    }
+        
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      res.statusCode(401)
+      res.end("token expired")
+    
+    } else if (error instanceof jwt.JsonWebTokenError) {
+      res.statusCode(401)
+      res.end("invalid token")
+      }
+     }     
+}  
 
 const server = http.createServer((req, res) => {
   res.statusCode = 200
@@ -147,132 +231,99 @@ const server = http.createServer((req, res) => {
   let body = null
   let pathname = url.parse(req.url, true).pathname
 
-  switch (pathname && req.method) {
-    case "/api/todo" && "GET":
-      getItemById(req, res)
-      break
+   if (pathname === "/api/todo" && req.method === "GET") {
+   req.on("data", async (data) => {
+      body = JSON.parse(data)
+    })
+     req.on('end', async () => {
+       const result = await verifyAccess(req, res)
+       if (result) {
+         getItemById(req,res)
+       } else {
+         res.statusCode(401)
+         res.end("token error")
+ }
+   })
+    
+  } else
+  if (pathname === "/api/todo" && req.method === "POST") {
+    req.on("data", async (data) => {
+      body = JSON.parse(data)
+      const result = await verifyAccess(req, res)
+       if (result){     
+         AddItemToDB(body)
+       } else {
+         res.statusCode(401)
+         res.end("token error")
+ }
+    })
 
-    case "/api/todo" && "POST":
-      req.on("data", (data) => {
-        body = JSON.parse(data)
-        AddItemToDB(body)
-      })
-      req.on("end", () => {
-        res.end(`todo item '${body.title}' was added`)
-      })
-      break
+    req.on("end", () => {
+      res.end(`todo item '${body.title}' was added`)
+    })
+  } else
+  if (pathname === "/api/todo" && req.method === "PUT") {
+    req.on("data",async (data) => {
+      body = JSON.parse(data)
+      const result = await verifyAccess(req, res)
+      if (result) {
+         editElement(body)
+      } else {
+         res.statusCode(401)
+         res.end("token error")
+      }
+     })
+    req.on("end", () => {
+      res.end(`todo item with id='${body.id}' was modified`)
+    })
+  } else if (pathname === "/api/todo" && req.method === "DELETE") {
+    req.on("data",async (data) => {
+      body = JSON.parse(data)
+        const result = await verifyAccess(req, res)
+         if (result) {
+          deleteElement(body)
+      } else {
+         res.statusCode(401)
+         res.end("token error")
+      }
+    })
+    req.on("end", () => {
+      res.end(`todo item with id='${body.id}' was deleted`)
+    })
+  } else if (pathname === "/auth" && req.method === "POST") {
+    req.on("data", async (data) => {
+      body = JSON.parse(data)
+    })
+    req.on("end", async () => {
+      const result = await addUser(body)
+      if (result) {
+        res.end("user alredy exist")
+            } else {
+         res.end(`user was added`)
+      }
+    })
+  } else if (pathname === "/login" && req.method === "POST") {
+    req.on("data", async (data) => {
+      body = JSON.parse(data)
+    })
+    req.on("end", async () => {
+      const result = await login(body)
 
-    case "/api/todo" && "PUT":
-      req.on("data", (data) => {
-        body = JSON.parse(data)
-        editElement(body)
-      })
-      req.on("end", () => {
-        res.end(`todo item with id='${body.id}' was modified`)
-      })
-      break
-
-    case "/api/todo" && "DELETE":
-      req.on("data", (data) => {
-        body = JSON.parse(data)
-        deleteElement(body)
-      })
-      req.on("end", () => {
-        res.end(`todo item with id='${body.id}' was deleted`)
-      })
-      break
-
-    case "/auth" && "POST":
-      req.on("data", async (data) => {
-        body = JSON.parse(data)
-      })
-      req.on("end", async () => {
-        const result = await addUser(body)
-        console.log(result)
-        if (result) {
-          res.end(`user was added`)
-        } else {
-          res.end("user alredy exist")
-        }
-      })
-      break
-
-    case "/login" && "POST":
-      req.on("data", async (data) => {
-        body = JSON.parse(data)
-      })
-      req.on("end", async () => {
-        const result = await login(body)
-        console.log("==1==")
-        console.log("result", result)
-        if (result) {
-          res.end(JSON.stringify(result))
-        } else {
-          res.end("Wrong credentials")
-        }
-      })
-      break
-
-    default:
-      break
+      if (result) {
+        res.end(JSON.stringify(result))
+      } else {
+        res.end("Wrong credentials")
+      }
+    })
+  } else if (pathname === "/refresh-tokens" && req.method === "POST") {
+     req.on("data", async (data) => {
+      body = JSON.parse(data)
+     })
+    req.on("end", async () => {
+      const tokens = await refreshTokens(body)
+      res.end(JSON.stringify(tokens))
+     })
   }
-
-  // if (pathname === "/api/todo" && req.method === "GET") {
-  //   getItemById(req, res)
-  // } else
-  // if (pathname === "/api/todo" && req.method === "POST") {
-  //   req.on("data", (data) => {
-  //     body = JSON.parse(data)
-  //     AddItemToDB(body)
-  //   })
-
-  //   req.on("end", () => {
-  //     res.end(`todo item '${body.title}' was added`)
-  //   })
-  // } else
-  // if (pathname === "/api/todo" && req.method === "PUT") {
-  //   req.on("data", (data) => {
-  //     body = JSON.parse(data)
-  //     editElement(body)
-  //   })
-  //   req.on("end", () => {
-  //     res.end(`todo item with id='${body.id}' was modified`)
-  //   })
-  // } else if (pathname === "/api/todo" && req.method === "DELETE") {
-  //   req.on("data", (data) => {
-  //     body = JSON.parse(data)
-  //     deleteElement(body)
-  //   })
-  //   req.on("end", () => {
-  //     res.end(`todo item with id='${body.id}' was deleted`)
-  //   })
-  // } else if (pathname === "/auth" && req.method === "POST") {
-  //   req.on("data", async (data) => {
-  //     body = JSON.parse(data)
-  //   })
-  //   req.on("end", async () => {
-  //     const result = await addUser(body)
-  //     if (result) {
-  //       res.end(`user was added`)
-  //     } else {
-  //       res.end("user alredy exist")
-  //     }
-  //   })
-  // } else if (pathname === "/login" && req.method === "POST") {
-  //   req.on("data", async (data) => {
-  //     body = JSON.parse(data)
-  //   })
-  //   req.on("end", async () => {
-  //     const result = await login(body)
-  //     console.log("==1==")
-  //     console.log("result", result)
-  //     if (result) {
-  //       res.end(JSON.stringify(result))
-  //     } else {
-  //       res.end("Wrong credentials")
-  //     }
-  //   })
-  // }
 })
 
 server.listen(8080, () => {
