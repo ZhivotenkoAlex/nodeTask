@@ -1,5 +1,3 @@
-const http = require("http")
-const url = require("url")
 const mariadb = require("mariadb")
 
 const pool = mariadb.createPool({
@@ -8,3 +6,6 @@ const pool = mariadb.createPool({
   password: "111",
   database: "nodeDB",
 })
+module.exports = {
+    pool
+}
