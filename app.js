@@ -6,8 +6,10 @@ const url = require("url")
 
 const {
   getItemById,
+  getItems,
   AddItemToDB,
   editElement,
+  setCheck,
   deleteElement,
 } = require("./helpers/todo")
 const { addUser } = require("./helpers/users")
@@ -20,10 +22,7 @@ const server = http.createServer((req, res) => {
   res.setHeader("Content-Type", "application/json")
   res.setHeader("Access-Control-Allow-Credentials", "true")
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With"
-  )
+  res.setHeader("Access-Control-Allow-Headers", "*")
 
   if (req.method === "OPTIONS") {
     res.writeHead(204)
@@ -42,7 +41,20 @@ const server = http.createServer((req, res) => {
       req.on("end", async () => {
         const result = await verifyAccess(req, res)
         if (result) {
-          getItemById(req, res)
+          await getItemById(req, res)
+        } else {
+          res.statusCode = 401
+          res.end("token error")
+        }
+      })
+    } else if (pathname === "/api/todo/user" && req.method === "GET") {
+      req.on("data", async (data) => {
+        body = JSON.parse(data)
+      })
+      req.on("end", async () => {
+        const result = await verifyAccess(req, res)
+        if (result) {
+          await getItems(req, res)
         } else {
           res.statusCode = 401
           res.end("token error")
@@ -51,44 +63,58 @@ const server = http.createServer((req, res) => {
     } else if (pathname === "/api/todo" && req.method === "POST") {
       req.on("data", async (data) => {
         body = JSON.parse(data)
-        const result = await verifyAccess(req, res)
+      })
+      req.on("end", async () => {
+        const result = await verifyAccess(req, res, body)
         if (result) {
           AddItemToDB(body)
+          res.end(`todo item '${body.title}' was added`)
         } else {
           res.statusCode = 401
-          res.end("token error")
+          res.end("verify error")
         }
-      })
-      req.on("end", () => {
-        res.end(`todo item '${body.title}' was added`)
       })
     } else if (pathname === "/api/todo" && req.method === "PUT") {
       req.on("data", async (data) => {
         body = JSON.parse(data)
-        const result = await verifyAccess(req, res)
+      })
+      req.on("end", async () => {
+        const result = await verifyAccess(req, res, body)
         if (result) {
           editElement(body)
+          res.end(`todo item with id='${body.id}' was modified`)
         } else {
           res.statusCode = 401
           res.end("token error")
         }
       })
-      req.on("end", () => {
-        res.end(`todo item with id='${body.id}' was modified`)
+    } else if (pathname === "/api/todo/check" && req.method === "PUT") {
+      req.on("data", async (data) => {
+        body = JSON.parse(data)
+      })
+      req.on("end", async () => {
+        const result = await verifyAccess(req, res, body)
+        if (result) {
+          setCheck(body)
+          res.end(`todo item with id='${body.id}' was modified`)
+        } else {
+          res.statusCode = 401
+          res.end("token error")
+        }
       })
     } else if (pathname === "/api/todo" && req.method === "DELETE") {
       req.on("data", async (data) => {
         body = JSON.parse(data)
-        const result = await verifyAccess(req, res)
+      })
+      req.on("end", async () => {
+        const result = await verifyAccess(req, res, body)
         if (result) {
           deleteElement(body)
+          res.end(`todo item with id='${body.id}' was deleted`)
         } else {
           res.statusCode = 401
           res.end("token error")
         }
-      })
-      req.on("end", () => {
-        res.end(`todo item with id='${body.id}' was deleted`)
       })
     } else if (pathname === "/auth" && req.method === "POST") {
       req.on("data", async (data) => {
@@ -97,9 +123,9 @@ const server = http.createServer((req, res) => {
       req.on("end", async () => {
         const result = await addUser(body)
         if (result) {
-          res.end("user alredy exist")
+          res.end("user was added")
         } else {
-          res.end(`user was added`)
+          res.end(`user alredy exist`)
         }
       })
     } else if (pathname === "/login" && req.method === "POST") {

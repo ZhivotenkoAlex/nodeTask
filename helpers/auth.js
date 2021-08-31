@@ -1,8 +1,9 @@
 const url = require("url")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
+const randomString = require("randomstring")
 const { v4: uuid } = require("uuid")
-const { findUserByEmail } = require("./users")
+const { findUserByEmail, findUserByToken, findUserById } = require("./users")
 const { pool } = require("../db/pool")
 require("dotenv").config()
 
@@ -13,23 +14,21 @@ async function isValidPassword(body) {
   return bcrypt.compare(body.password, user.password)
 }
 
-async function generateAccessToken(body) {
-  const user = await findUserByEmail(body)
-  const payload = { type: "access", id: user.id }
-  const token = jwt.sign(payload, SECRET, { expiresIn: "4m" })
+async function generateAccessToken(user) {
+  // const user = await findUserByEmail(body)
+  const payload = { type: "access", id: user.userId }
+  const token = jwt.sign(payload, SECRET, { expiresIn: "10h" })
   return token
 }
 
 async function generateRefreshToken() {
-  const payload = { id: uuid(), type: "refresh" }
-
-  const token = jwt.sign(payload, SECRET, { expiresIn: "10m" })
+  const salt = await bcrypt.genSalt(10)
+  const token = await bcrypt.hash(randomString.generate(32), salt, null)
   return token
 }
 
-async function updateDbRefreshToken(refreshToken, body) {
+async function updateDbRefreshToken(refreshToken, user) {
   let conn = await pool.getConnection()
-  const user = await findUserByEmail(body)
   try {
     const editInfo = [refreshToken, user.userId]
     const sql = `UPDATE users SET token=? WHERE userId=?`
@@ -40,11 +39,13 @@ async function updateDbRefreshToken(refreshToken, body) {
   }
 }
 
-async function updateTokens(body) {
-  const accessToken = await generateAccessToken(body)
+async function updateTokens(user) {
+  const accessToken = await generateAccessToken(user)
   const refreshToken = await generateRefreshToken()
+  console.log("updateDbRefreshToken")
+  console.log(user)
 
-  await updateDbRefreshToken(refreshToken, body)
+  await updateDbRefreshToken(refreshToken, user)
   return {
     accessToken,
     refreshToken,
@@ -55,7 +56,8 @@ async function login(body) {
   try {
     const isValid = await isValidPassword(body)
     if (isValid) {
-      const tokens = await updateTokens(body)
+      const user = await findUserByEmail(body)
+      const tokens = await updateTokens(user)
       return tokens
     }
   } catch (error) {
@@ -65,39 +67,49 @@ async function login(body) {
 
 async function refreshTokens(body) {
   const refreshToken = body.refreshToken
-  let payload
+  const user = await findUserByToken(refreshToken)
+  console.log(user)
   try {
-    payload = jwt.verify(refreshToken, SECRET)
-    if (payload.type !== "refresh") {
-      return false
+    if (user) {
+      return updateTokens(user)
+    } else {
+      return "tokenError"
     }
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return "token expired"
-
-      return tokens
-    } else if (error instanceof jwt.JsonWebTokenError) {
-      return "token error"
-    }
+    console.log(error)
+    return "token error"
   }
-
-  return updateTokens(body)
 }
 
-async function verifyAccess(req, res) {
+async function verifyAccess(req, res, body = null) {
   try {
     const auth = url.parse(req.url, true).query.Authorization
-    const token = auth.split(" ")[1]
+    let token = null
+
+    if (body.token) {
+      token = body.token.split(" ")[1]
+    } else if (auth) {
+      token = auth.split(" ")[1]
+    }
     const payload = jwt.verify(token, SECRET)
+    const user = await findUserById(payload.id)
+
     if (payload.type !== "access") {
       res.statusCode = 401
       res.end("invalid token")
+      return false
     }
-  } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
+
+    if (user.date + user.expiresIn < Date.now()) {
       res.statusCode = 401
       res.end("token expired")
-    } else if (error instanceof jwt.JsonWebTokenError) {
+      return false
+    }
+    if (user) {
+      return true
+    }
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
       res.statusCode = 401
       res.end("error token")
     }
