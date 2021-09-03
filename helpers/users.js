@@ -1,12 +1,13 @@
 const bcrypt = require("bcrypt")
 require("dotenv").config()
+const url = require("url")
 const { pool } = require("../db/pool")
 
 async function findUserByEmail(body) {
   try {
     let conn = await pool.getConnection()
     const email = body.email
-    const sql = `SELECT * FROM users WHERE email=? LIMIT 1;`
+    const sql = "SELECT * FROM users WHERE email=? LIMIT 1"
     let [row] = await conn.query(sql, email, null)
     conn.end()
     return row
@@ -16,10 +17,25 @@ async function findUserByEmail(body) {
   }
 }
 
+async function getUser(req, res) {
+  const email = url.parse(req.url, true).query.email
+  try {
+    let conn = await pool.getConnection()
+    const sql = "SELECT * FROM users WHERE email=? LIMIT 1"
+    let [row] = await conn.query(sql, email, null)
+    const response = { userId: row.userId, email: row.email, name: row.name }
+    conn.end()
+    return response
+  } catch (error) {
+    console.log("error", error)
+    return false
+  }
+}
+
 async function findUserByToken(token) {
   try {
     let conn = await pool.getConnection()
-    const sql = `SELECT * FROM users WHERE token=? LIMIT 1;`
+    const sql = "SELECT * FROM users WHERE token=? LIMIT 1"
     let [row] = await conn.query(sql, token, null)
     conn.end()
     return row
@@ -57,6 +73,8 @@ async function addUser(body) {
       const sql = `INSERT INTO users (email,password,date,expiresIn) VALUES (?,?,?,?)`
       let row = await conn.query(sql, user, null)
       conn.end()
+      console.log("row")
+      console.log(row)
       return true
     }
   } catch (error) {
@@ -70,4 +88,5 @@ module.exports = {
   findUserByToken,
   findUserById,
   addUser,
+  getUser,
 }

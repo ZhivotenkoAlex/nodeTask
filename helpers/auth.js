@@ -2,7 +2,7 @@ const url = require("url")
 const bcrypt = require("bcrypt")
 const jwt = require("jsonwebtoken")
 const randomString = require("randomstring")
-const { v4: uuid } = require("uuid")
+// const { v4: uuid } = require("uuid")
 const { findUserByEmail, findUserByToken, findUserById } = require("./users")
 const { pool } = require("../db/pool")
 require("dotenv").config()
@@ -30,8 +30,8 @@ async function generateRefreshToken() {
 async function updateDbRefreshToken(refreshToken, user) {
   let conn = await pool.getConnection()
   try {
-    const editInfo = [refreshToken, user.userId]
-    const sql = `UPDATE users SET token=? WHERE userId=?`
+    const editInfo = [refreshToken, Date.now(), user.userId]
+    const sql = `UPDATE users SET token=?,date=? WHERE userId=?`
     let rows = await conn.query(sql, editInfo, null)
     conn.end()
   } catch (error) {
@@ -42,9 +42,6 @@ async function updateDbRefreshToken(refreshToken, user) {
 async function updateTokens(user) {
   const accessToken = await generateAccessToken(user)
   const refreshToken = await generateRefreshToken()
-  console.log("updateDbRefreshToken")
-  console.log(user)
-
   await updateDbRefreshToken(refreshToken, user)
   return {
     accessToken,
@@ -68,7 +65,6 @@ async function login(body) {
 async function refreshTokens(body) {
   const refreshToken = body.refreshToken
   const user = await findUserByToken(refreshToken)
-  console.log(user)
   try {
     if (user) {
       return updateTokens(user)
