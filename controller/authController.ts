@@ -1,9 +1,9 @@
 const Auth = require("../model/authModel")
 
-function login(req, res) {
+function login(req: { on: (arg0: string, arg1: () => Promise<any>) => void }, res: { writeHead: (arg0: number, arg1: { "Content-Type": string }) => void; end: (arg0: string) => void }) {
   try {
-    let body = ""
-    req.on("data", (data) => {
+    let body= ""
+      ("data", (data:{}) => {
       body += data.toString()
     })
     req.on("end", async () => {

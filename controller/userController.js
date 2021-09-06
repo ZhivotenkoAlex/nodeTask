@@ -1,5 +1,6 @@
 const User = require("../model/userModel")
 const url = require("url")
+const { JsonWebTokenError } = require("jsonwebtoken")
 
 async function getUser(req, res) {
   try {
@@ -82,6 +83,7 @@ function refreshTokens(req, res) {
       console.log("==tokens RT==")
       console.log(tokens)
       if (tokens instanceof Error) {
+        res.writeHead(404, { "Content-Type": "application/json" })
         res.end(JSON.stringify({ error: "Wrong token" }))
       }
       res.end(JSON.stringify(tokens))

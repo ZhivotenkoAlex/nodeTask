@@ -2,34 +2,28 @@ const http = require("http")
 const url = require("url")
 const querystring = require("querystring")
 
-// const bcrypt = require("bcrypt")
-// const jwt = require("jsonwebtoken")
-
-// const {
-//   getItemById,
-//   getItems,
-//   AddItemToDB,
-//   editElement,
-//   setCheck,
-//   deleteElement,
-// } = require("./helpers/todo")
-// const { addUser, findUserByEmail, getUser } = require("./helpers/users")
-// const { login, refreshTokens, verifyAccess } = require("./helpers/auth")
-
 const {
   getUser,
   login,
   createUser,
   refreshTokens,
 } = require("./controller/userController")
-const { getItems } = require("./controller/todoController")
+const {
+  getItemById,
+  getItems,
+  addItem,
+  editItem,
+  setCheck,
+  deleteItem,
+} = require("./controller/todoController")
+const jwt = require("jsonwebtoken")
 const port = 8080
 
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*")
   res.setHeader("Content-Type", "application/json")
   res.setHeader("Access-Control-Allow-Credentials", "true")
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
   res.setHeader("Access-Control-Allow-Headers", "*")
 
   if (req.method === "OPTIONS") {
@@ -38,7 +32,7 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  if (["GET", "POST", "PUT", "DELETE"].indexOf(req.method) > -1) {
+  if (["GET", "POST", "PATCH", "DELETE"].indexOf(req.method) > -1) {
     let body = null
     let pathname = url.parse(req.url, true).pathname
     //Users paths
@@ -55,151 +49,27 @@ const server = http.createServer((req, res) => {
       refreshTokens(req, res)
     }
 
-    //todo paths
-
+    //Todo paths
     if (pathname === "/api/todo" && req.method === "GET") {
       getItems(req, res)
+    } else if (pathname === "/api/todo/id" && req.method === "GET") {
+      getItemById(req, res)
+    } else if (pathname === "/api/todo" && req.method === "POST") {
+      addItem(req, res)
+    } else if (pathname === "/api/todo/title" && req.method === "PATCH") {
+      editItem(req, res)
+    } else if (pathname === "/api/todo/check" && req.method === "PATCH") {
+      setCheck(req, res)
+    } else if (pathname === "/api/todo" && req.method === "DELETE") {
+      deleteItem(req, res)
     }
-    // if (pathname === "/api/todo" && req.method === "GET") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await verifyAccess(req, res)
-    //     if (result) {
-    //       await getItemById(req, res)
-    //     } else {
-    //       res.statusCode = 401
-    //       res.end("token error")
-    //     }
-    //   })
-    // } else if (pathname === "/api/todos" && req.method === "GET") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await verifyAccess(req, res)
-    //     if (result) {
-    //       await getItems(req, res)
-    //     } else {
-    //       res.statusCode = 401
-    //       res.end("token error")
-    //     }
-    //   })
-    // } else if (pathname === "/user" && req.method === "GET") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const user = await getUser(req, res)
-    //     if (user) {
-    //       res.end(JSON.stringify(user))
-    //     } else {
-    //       res.statusCode = 401
-    //       res.end("user not found")
-    //     }
-    //   })
-    // } else if (pathname === "/api/todo" && req.method === "POST") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await verifyAccess(req, res, body)
-    //     if (result) {
-    //       AddItemToDB(body)
-    //       res.end({ status: `todo item was added` })
-    //     } else {
-    //       res.statusCode = 401
-    //       res.end({ error: "verify error" })
-    //     }
-    //   })
-    // } else if (pathname === "/api/todo" && req.method === "PUT") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await verifyAccess(req, res, body)
-    //     if (result) {
-    //       editElement(body)
-    //       res.end({ status: `todo item with id='${body.id}' was modified` })
-    //     } else {
-    //       res.statusCode = 401
-    //       res.end("token error")
-    //     }
-    //   })
-    // } else if (pathname === "/api/todo/check" && req.method === "PUT") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     try {
-    //       const result = await verifyAccess(req, res, body)
-    //       if (result) {
-    //         setCheck(body)
-    //         res.statusCode = "200"
-    //         return `todo item with id='${body.id}' was modified`
-    //       }
-    //     } catch (error) {
-    //       res.statusCode = "401"
-    //       res.end("token error")
-    //     }
-    //   })
-    // } else if (pathname === "/api/todo" && req.method === "DELETE") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     try {
-    //       const result = await verifyAccess(req, res, body)
-    //       if (result) {
-    //         deleteElement(body)
-    //         res.statusCode = 200
-    //         res.end({ status: `todo item with id='${body.id}' was deleted` })
-    //       }
-    //     } catch (e) {
-    //       res.statusCode = 401
-    //       res.end("token error")
-    //       console.log(e)
-    //     }
-    //   })
-    // } else if (pathname === "/auth" && req.method === "POST") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await addUser(body)
-    //     if (result) {
-    //       res.end({ status: "user was added" })
-    //     } else {
-    //       res.end({ error: `user alredy exist` })
-    //     }
-    //   })
-    // } else if (pathname === "/login" && req.method === "POST") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const result = await login(body)
-    //     if (result) {
-    //       res.end(JSON.stringify(result))
-    //     } else {
-    //       res.end({ error: "Wrong credentials" })
-    //     }
-    //   })
-    // } else if (pathname === "/refresh-tokens" && req.method === "POST") {
-    //   req.on("data", async (data) => {
-    //     body = JSON.parse(data)
-    //   })
-    //   req.on("end", async () => {
-    //     const tokens = await refreshTokens(body)
-    //     res.end(JSON.stringify(tokens))
-    //   })
-    // }
     return
   }
 
   res.writeHead(405)
-  res.end({ error: `${req.method} is not allowed for the request.` })
+  res.end(
+    JSON.stringify({ error: `${req.method} is not allowed for the request.` })
+  )
 })
 
 server.listen(port, () => {

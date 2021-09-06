@@ -78,7 +78,7 @@ async function generateAccessToken(user) {
     const payload = {
       type: "access",
       id: user.userId,
-      lifetime: toString(REFRESH_TOKEN_LIFE_TIME + Date.now()),
+      lifetime: REFRESH_TOKEN_LIFE_TIME + Date.now(),
     }
     const token = jwt.sign(payload, SECRET, { expiresIn: "10h" })
     return token
@@ -156,25 +156,27 @@ async function refreshTokens(refreshToken) {
   }
 }
 
-async function verifyAccess(accessToken) {
-  try {
-    const token = accessToken.split
-    const payload = jwt.verify(token, SECRET)
-    const user = null
-    if (payload.type !== "access") {
-      return new Error("Invalid token")
-    } else if (payload.lifetime < Date.now()) {
-      return new Error("Token expired")
-    } else user = await findUser(payload.id)
-    if (user) {
-      return true
-    } else {
-      return new Error("Invalid token")
-    }
-  } catch (error) {
-    console.log(error)
-  }
-}
+// async function verifyAccess(accessToken) {
+//   try {
+//     const payload = jwt.verify(accessToken, SECRET)
+//     let user = null
+//     if (payload.type !== "access") {
+//       return new Error("Invalid token")
+//     } else if (payload.lifetime < Date.now()) {
+
+//       return new Error("Token expired")
+//     } else user = await findUser(payload.id)
+//     if (user) {
+//       return true
+//     } else {
+
+//       return new Error("Invalid token")
+//     }
+//   } catch (error) {
+//     console.log(error)
+//     return false
+//   }
+// }
 
 module.exports = {
   isValidPassword,
@@ -184,7 +186,7 @@ module.exports = {
   updateTokens,
   login,
   refreshTokens,
-  verifyAccess,
+  // verifyAccess,
   findUser,
   addUser,
 }
