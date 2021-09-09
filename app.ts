@@ -1,24 +1,11 @@
-const http = require("http")
-const url = require("url")
-const querystring = require("querystring")
+import * as http from "http"
+import url from "url"
+import { UserController } from "./controller/userController"
+import {TodoController} from "./controller/todoController"
+const User = new UserController()
+const Todo = new TodoController()
 
-const {
-  getUser,
-  login,
-  createUser,
-  refreshTokens,
-} = require("./controller/userController")
-const {
-  getItemById,
-  getItems,
-  addItem,
-  editItem,
-  setCheck,
-  deleteItem,
-} = require("./controller/todoController")
-const jwt = require("jsonwebtoken")
 const port = 8080
-
 const server = http.createServer((req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*")
   res.setHeader("Content-Type", "application/json")
@@ -32,36 +19,36 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  if (["GET", "POST", "PATCH", "DELETE"].indexOf(req.method) > -1) {
-    let body = null
-    let pathname = url.parse(req.url, true).pathname
+
+  if (req.method && ["GET", "POST", "PATCH", "DELETE"].indexOf(req.method) > -1) {
+    let pathname = url.parse(<string>req.url, true).pathname
     //Users paths
     if (pathname === "/api/user" && req.method === "GET") {
-      getUser(req, res)
+      User.getUser(req, res)
     } else if (pathname === "/api/user" && req.method === "POST") {
-      createUser(req, res)
+      User.createUser(req, res)
     } else if (pathname === "/api/auth/login" && req.method === "POST") {
-      login(req, res)
+      User.login(req, res)
     } else if (
       pathname === "/api/auth/refresh_tokens" &&
       req.method === "POST"
     ) {
-      refreshTokens(req, res)
+      User.refreshTokens(req, res)
     }
 
     //Todo paths
     if (pathname === "/api/todo" && req.method === "GET") {
-      getItems(req, res)
+      Todo.getItems(req, res)
     } else if (pathname === "/api/todo/id" && req.method === "GET") {
-      getItemById(req, res)
+      Todo.getItemById(req, res)
     } else if (pathname === "/api/todo" && req.method === "POST") {
-      addItem(req, res)
+      Todo.addItem(req, res)
     } else if (pathname === "/api/todo/title" && req.method === "PATCH") {
-      editItem(req, res)
+      Todo.editItem(req, res)
     } else if (pathname === "/api/todo/check" && req.method === "PATCH") {
-      setCheck(req, res)
+      Todo.setCheck(req, res)
     } else if (pathname === "/api/todo" && req.method === "DELETE") {
-      deleteItem(req, res)
+      Todo.deleteItem(req, res)
     }
     return
   }

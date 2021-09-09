@@ -1,11 +1,13 @@
-const mariadb = require("mariadb")
+import mariadb from "mariadb"
 
-const pool = mariadb.createPool({
+export const pool: mariadb.Pool = mariadb.createPool({
   host: "localhost",
   user: "root",
   password: "111",
   database: "nodeDB",
 })
-module.exports = {
-    pool
-}
+
+
+
+
+
