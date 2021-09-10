@@ -8,6 +8,7 @@
     "@types/node": "^16.7.10",
     "bcrypt": "^5.0.1",
     "dotenv": "^10.0.0",
+    "eslint": "^7.32.0",
     "jsonwebtoken": "^8.5.1",
     "mariadb": "^2.5.4",
     "nodemon": "^2.0.12",
@@ -15,13 +16,29 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "@types/jsonwebtoken": "^8.5.5",
+    "@types/randomstring": "^1.1.7",
+    "@typescript-eslint/eslint-plugin": "^4.31.0",
+    "@typescript-eslint/parser": "^4.31.0",
+    "eslint-config-airbnb-base": "^14.2.1",
+    "eslint-config-airbnb-typescript": "^14.0.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-prettier": "^4.0.0",
+    "prettier": "^2.4.0",
+    "ts-loader": "^9.2.5",
     "ts-node": "^10.2.1",
     "typescript": "^4.4.2"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./index.js",
-    "start:dev": "nodemon ./index.ts"
+    "start": "node ./index.ts",
+    "start:dev": "nodemon ./index.ts",
+    "lint": "eslint src/**/*.ts",
+    "format": "eslint src/**/*.ts --fix",
+    "compile": "tsc && node ./dist/index.js",
+    "dev": "./node_modules/nodemon/bin/nodemon.js -e ts  --exec \"npm run compile\"",
+    "build": "tsc"
   },
   "author": "",
   "license": "ISC"
